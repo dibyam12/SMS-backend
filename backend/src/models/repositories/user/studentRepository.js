@@ -31,6 +31,29 @@ const findByRollNo = async (rollNo) => {
   return result.rows[0] || null;
 };
 
+const findByClass = async ({ grade_id, section_id, batch_id }) => {
+  const result = await pool.query(
+    `SELECT 
+        s.*,
+        e.id AS enrollment_id,
+        e.grade_id,
+        e.section_id,
+        e.batch_id,
+        au.first_name,
+        au.last_name,
+        au.email
+     FROM enrollments e
+     JOIN students s   ON e.student_id = s.id
+     JOIN app_users au ON s.user_id = au.id
+     WHERE e.grade_id = $1
+       AND e.section_id = $2
+       AND e.batch_id = $3
+     ORDER BY s.roll_no`,
+    [grade_id, section_id, batch_id]
+  );
+  return result.rows;
+};
+
 // Create a new student profile for an existing app_user
 const createStudent = async ({
   user_id,
@@ -141,6 +164,7 @@ const studentRepository = {
   updateStudent,
   deleteStudent,
   findWithEnrollment,
+  findByClass,
 };
 
 export default studentRepository;

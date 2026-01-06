@@ -1,33 +1,39 @@
-import jwt from 'jsonwebtoken';
+// src/middleware/auth.js
+import jwt from "jsonwebtoken";
 
-const authMiddleware = (req,res,next)=>{
-    // Get token from request header
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+// 1) define the middleware
+const authMiddleware = (req, res, next) => {
+  const token = req.header("Authorization")?.replace("Bearer ", "");
 
-    // Check if token exists
-    if (!token) {
-        return res.status(401).json({ message: 'No token, authorization denied' });
-    }
+  if (!token) {
+    return res.status(401).json({ message: "No token, authorization denied" });
+  }
 
-    try {
-        // Verify token
-        const decoded_access = jwt.verify(token, process.env.JWT_SECRET_ACCESS);
-
-        // Add user from payload to request object
-        req.user = decoded_access;
-        next();
-    } catch (err) {
-        console.error('Token verification error:', err);
-        res.status(401).json({ message: 'Token is not valid' });
-    }
-
-
-}
-
-
-const generateToken = (userId,time,type) => {
-    const secret = type === 'access' ? process.env.JWT_SECRET_ACCESS : process.env.JWT_SECRET_REFRESH;
-    return jwt.sign({ userId }, secret, { expiresIn: time });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_ACCESS);
+    // decoded: { userId, role, iat, exp }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("Token verification error:", err);
+    return res.status(401).json({ message: "Token is not valid" });
+  }
 };
 
+// 2) generateToken helper
+const generateToken = (user, time, type) => {
+  const secret =
+    type === "access"
+      ? process.env.JWT_SECRET_ACCESS
+      : process.env.JWT_SECRET_REFRESH;
+
+  return jwt.sign(
+    { userId: user.id, role: user.role },
+    secret,
+    { expiresIn: time }
+  );
+};
+
+// 3) export correctly
 export { authMiddleware, generateToken };
+export default authMiddleware;

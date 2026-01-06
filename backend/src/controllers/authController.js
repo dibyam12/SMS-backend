@@ -1,11 +1,13 @@
-// import pool from "../config/db.js";
-import bcrypt from 'bcrypt';
+// src/controllers/authController.js
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { generateToken } from "../middleware/auth.js";
 import redisClient from "../redis/redisClient.js";
 import userRepository from "../models/repositories/user/userRepository.js";
 
 const { allowedRoles } = userRepository;
 
+// REGISTER
 const registerUser = async (req, res) => {
   const { email, username, password, first_name, last_name, role, is_staff } =
     req.body;
@@ -66,6 +68,7 @@ const registerUser = async (req, res) => {
   }
 };
 
+// LOGIN
 const loginUser = async (req, res) => {
   const { username, password } = req.body;
 
@@ -80,8 +83,9 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: "Incorrect email or password" });
     }
 
-    const accessToken = generateToken(user.id, "15m", "access");
-    const refreshToken = generateToken(user.id, "7d", "refresh");
+    // include role in token
+    const accessToken = generateToken(user, "15m", "access");
+    const refreshToken = generateToken(user, "7d", "refresh");
 
     if (redisClient) {
       const hashedRefresh = await bcrypt.hash(refreshToken, 10);
@@ -102,6 +106,7 @@ const loginUser = async (req, res) => {
   }
 };
 
+// LOGOUT
 const logoutUser = async (req, res) => {
   const { refreshToken } = req.body;
 
@@ -123,6 +128,7 @@ const logoutUser = async (req, res) => {
   return res.status(200).json({ message: "Logged out successfully" });
 };
 
+// REFRESH
 const refreshUserToken = async (req, res) => {
   if (!redisClient) {
     return res
@@ -137,9 +143,11 @@ const refreshUserToken = async (req, res) => {
   }
 
   let userId;
+  let role;
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET_REFRESH);
     userId = decoded.userId;
+    role = decoded.role;
   } catch (err) {
     return res.status(403).json({ message: "Invalid or expired refresh token" });
   }
@@ -157,19 +165,13 @@ const refreshUserToken = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
+    // One-time use refresh token
     await redisClient.del(`refresh:${userId}`);
 
-    const newAccessToken = jwt.sign(
-      { userId },
-      process.env.JWT_SECRET_ACCESS,
-      { expiresIn: "15m" }
-    );
+    const userPayload = { id: userId, role };
 
-    const newRefreshToken = jwt.sign(
-      { userId },
-      process.env.JWT_SECRET_REFRESH,
-      { expiresIn: "7d" }
-    );
+    const newAccessToken = generateToken(userPayload, "15m", "access");
+    const newRefreshToken = generateToken(userPayload, "7d", "refresh");
 
     const hashedNewRefresh = await bcrypt.hash(newRefreshToken, 10);
     await redisClient.set(`refresh:${userId}`, hashedNewRefresh, {

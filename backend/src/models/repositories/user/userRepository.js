@@ -59,11 +59,45 @@ const createUser = async ({
 
   return result.rows[0];
 };
+
+const updateUser = async (id, updates) => {
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    fields.push(`${key} = $${idx}`);
+    values.push(value);
+    idx += 1;
+  }
+
+  if (fields.length === 0) {
+    const existing = await pool.query(
+      "SELECT id, email, username, first_name, last_name, role, is_active, is_staff FROM app_users WHERE id = $1",
+      [id]
+    );
+    return existing.rows[0] || null;
+  }
+
+  values.push(id);
+
+  const result = await pool.query(
+    `UPDATE app_users
+     SET ${fields.join(", ")}
+     WHERE id = $${idx}
+     RETURNING id, email, username, first_name, last_name, role, is_active, is_staff`,
+    values
+  );
+
+  return result.rows[0] || null;
+};
+
 const userRepository = {
   allowedRoles,
   findByEmail,
   findByUsername,
   createUser,
+  updateUser,
 };
 
 export default userRepository;
